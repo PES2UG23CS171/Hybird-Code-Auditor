@@ -31,3 +31,4 @@ streamlit run app.py
 
 - The bundled guidance files are concise local summaries intended for retrieval grounding.
 - The verifier checks syntactic validity and measured complexity; deeper semantic validation should be backed by project tests.
+# Hybird-Code-Auditor
