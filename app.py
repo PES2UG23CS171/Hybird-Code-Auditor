@@ -83,7 +83,16 @@ with st.sidebar:
             "API base URL", value=_secret("LLM_BASE_URL", "https://api.groq.com/openai/v1")
         )
         api_model = st.text_input("Model", value=_secret("LLM_MODEL", "llama-3.1-8b-instant"))
-        api_key = st.text_input("API key", value=_secret("LLM_API_KEY"), type="password")
+        # Never prefill the key into the widget: on a shared deployment that
+        # would expose the server-side secret to every visitor.
+        secret_key = _secret("LLM_API_KEY")
+        typed_key = st.text_input(
+            "API key" + (" (optional — a server key is configured)" if secret_key else ""),
+            type="password",
+        )
+        api_key = typed_key or secret_key
+        if secret_key and not typed_key:
+            st.caption("Using the API key from server secrets.")
         client = OpenAICompatibleClient(base_url=api_base, api_key=api_key, model_name=api_model)
 
     if client.is_available():
