@@ -2,7 +2,7 @@
 
 A hybrid static-analysis + LLM refactoring system for Python. It combines deterministic code analysis (AST, cyclomatic complexity, pylint) with retrieval-grounded LLM refactoring in a generate → critique → verify agent loop, behind a Streamlit UI.
 
-**Live demo:** _add your Streamlit Cloud URL here after deploying_
+**Live demo:** [hybird-code-auditor.streamlit.app](https://hybird-code-auditor-bnszutjrt5hfwsqvhwifbt.streamlit.app)
 
 ## How it works
 
@@ -42,10 +42,11 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-For full refactoring, either:
+The LLM backend is picked automatically:
 
-- **Ollama (fully local):** install [Ollama](https://ollama.com), run `ollama pull llama3.1` and keep the server running, or
-- **Hosted API:** pick "Hosted API" in the sidebar and provide an OpenAI-compatible base URL, model, and API key (e.g. a free Groq key).
+- **Hosted API:** if an `LLM_API_KEY` secret/environment variable is set (with optional `LLM_BASE_URL` and `LLM_MODEL`), any OpenAI-compatible endpoint is used.
+- **Ollama (fully local):** otherwise, a local [Ollama](https://ollama.com) server is used when reachable, with whatever model is installed (`ollama pull llama3.1`).
+- **Analysis-only:** with neither available, the app still reports complexity, pylint findings, and retrieved guidelines.
 
 ## Deploy (Streamlit Community Cloud)
 

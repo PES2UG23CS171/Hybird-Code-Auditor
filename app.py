@@ -35,6 +35,26 @@ def _installed_ollama_models(host: str) -> list[str]:
         return []
 
 
+def _make_client():
+    """Pick the LLM backend automatically.
+
+    A configured LLM_API_KEY secret selects the hosted OpenAI-compatible
+    backend; otherwise a local Ollama server is used when reachable. The
+    key never leaves the server.
+    """
+    api_key = _secret("LLM_API_KEY")
+    if api_key:
+        return OpenAICompatibleClient(
+            base_url=_secret("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
+            api_key=api_key,
+            model_name=_secret("LLM_MODEL", "llama-3.1-8b-instant"),
+        )
+    host = _secret("OLLAMA_HOST", "http://localhost:11434")
+    models = _installed_ollama_models(host)
+    model_name = _secret("OLLAMA_MODEL") or (models[0] if models else "llama3.2")
+    return OllamaClient(base_url=host, model_name=model_name)
+
+
 def _default_sample() -> str:
     return """def process_items(items):
     total = 0
@@ -63,45 +83,17 @@ st.caption(
     "and an LLM generate-critique-verify loop."
 )
 
+client = _make_client()
+
 with st.sidebar:
     st.header("Configuration")
-    backend = st.selectbox(
-        "LLM backend",
-        ["Ollama (local)", "Hosted API (OpenAI-compatible)"],
-        index=1 if _secret("LLM_API_KEY") else 0,
-    )
-    if backend == "Ollama (local)":
-        ollama_host = st.text_input("Ollama host", value="http://localhost:11434")
-        installed_models = _installed_ollama_models(ollama_host)
-        if installed_models:
-            model_name = st.selectbox("Ollama model", installed_models)
-        else:
-            model_name = st.text_input("Ollama model", value="llama3.2")
-        client = OllamaClient(base_url=ollama_host, model_name=model_name)
-    else:
-        api_base = st.text_input(
-            "API base URL", value=_secret("LLM_BASE_URL", "https://api.groq.com/openai/v1")
-        )
-        api_model = st.text_input("Model", value=_secret("LLM_MODEL", "llama-3.1-8b-instant"))
-        # Never prefill the key into the widget: on a shared deployment that
-        # would expose the server-side secret to every visitor.
-        secret_key = _secret("LLM_API_KEY")
-        typed_key = st.text_input(
-            "API key" + (" (optional — a server key is configured)" if secret_key else ""),
-            type="password",
-        )
-        api_key = typed_key or secret_key
-        if secret_key and not typed_key:
-            st.caption("Using the API key from server secrets.")
-        client = OpenAICompatibleClient(base_url=api_base, api_key=api_key, model_name=api_model)
-
-    if client.is_available():
-        st.success("LLM backend reachable — full refactoring enabled.")
-    else:
-        st.warning("LLM backend not reachable — the app will run in analysis-only mode.")
-
     complexity_threshold = st.number_input("Complexity threshold", min_value=1, max_value=50, value=10)
     max_rounds = st.number_input("Max rounds", min_value=1, max_value=10, value=5)
+    if client.is_available():
+        backend_label = "hosted API" if isinstance(client, OpenAICompatibleClient) else "local Ollama"
+        st.success(f"Model: {client.model_name} ({backend_label})")
+    else:
+        st.warning("No LLM reachable — running in analysis-only mode.")
     st.divider()
     st.write(
         "The bundled local guidance is built from concise summaries of PEP 8 "
