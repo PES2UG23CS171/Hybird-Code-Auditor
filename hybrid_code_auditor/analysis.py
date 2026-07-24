@@ -47,14 +47,16 @@ def analyze_python_source(source_code: str, path: Path | None = None) -> list[Fu
     findings: list[FunctionFinding] = []
     for node in collector.functions:
         name = getattr(node, "name", "<lambda>")
-        lineno = int(getattr(node, "lineno", 1))
+        def_lineno = int(getattr(node, "lineno", 1))
+        decorators = getattr(node, "decorator_list", [])
+        start_lineno = min((int(d.lineno) for d in decorators), default=def_lineno)
         end_lineno = _function_end_lineno(node)
-        complexity = cc_map.get((name, lineno), 1)
-        function_issues = [issue for issue in pylint_issues if lineno <= issue.line <= end_lineno]
+        complexity = cc_map.get((name, def_lineno), 1)
+        function_issues = [issue for issue in pylint_issues if start_lineno <= issue.line <= end_lineno]
         findings.append(
             FunctionFinding(
                 name=name,
-                lineno=lineno,
+                lineno=start_lineno,
                 end_lineno=end_lineno,
                 complexity=complexity,
                 pylint_issues=function_issues,
@@ -82,7 +84,12 @@ def _collect_pylint_issues(source_code: str, path: Path | None = None) -> list[I
                 temp_file.write(source_code)
                 temp_path = Path(temp_file.name)
 
-        Run([str(temp_path), "--score=n", "--reports=n", "--output-format=json"], reporter=reporter, do_exit=False)
+        pylint_args = [str(temp_path), "--score=n", "--reports=n"]
+        try:
+            Run(pylint_args, reporter=reporter, exit=False)
+        except TypeError:
+            # Older pylint releases used `do_exit` instead of `exit`.
+            Run(pylint_args, reporter=reporter, do_exit=False)
         raw = reporter_output.getvalue().strip()
         messages = json.loads(raw) if raw else []
     except Exception:
@@ -96,6 +103,10 @@ def _collect_pylint_issues(source_code: str, path: Path | None = None) -> list[I
 
     issues: list[Issue] = []
     for message in messages:
+        # Skip convention/info-level notes (e.g. missing docstrings) so they
+        # do not turn every function into a refactor candidate.
+        if message.get("type") not in {"warning", "error", "refactor"}:
+            continue
         issues.append(
             Issue(
                 line=int(message.get("line", 0)),

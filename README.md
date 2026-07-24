@@ -1,34 +1,81 @@
 # Hybrid Code Auditor
 
-Local-first code refactoring system for Python that combines AST analysis, static quality checks, retrieval-grounded prompting, and a Streamlit interface.
+A hybrid static-analysis + LLM refactoring system for Python. It combines deterministic code analysis (AST, cyclomatic complexity, pylint) with retrieval-grounded LLM refactoring in a generate → critique → verify agent loop, behind a Streamlit UI.
 
-## What it does
+**Live demo:** _add your Streamlit Cloud URL here after deploying_
 
-- Finds Python functions with cyclomatic complexity above a threshold or with Pylint issues.
-- Builds a local FAISS index over concise PEP 8 and OWASP-inspired guidance chunks.
-- Uses a local Ollama model to generate, critique, and verify refactors in a 3-agent loop.
-- Enforces verification constraints:
-  - cyclomatic complexity below 10
-  - LOC change within 20 percent
-  - valid Python syntax
-- Shows original code, refactored code, diff, complexity reduction, and retrieved guidance in Streamlit.
+## How it works
 
-## Local setup
+```
+Python source
+     │
+     ▼
+1. Static analysis ──── AST walk + radon cyclomatic complexity + pylint issues
+     │                  → flags functions above the complexity threshold
+     ▼
+2. Retrieval (RAG) ──── TF-IDF vectors over PEP 8 / OWASP guidance chunks,
+     │                  searched with a FAISS inner-product index
+     ▼
+3. Agent loop ────────  Generator LLM proposes a refactor
+     │                  Critic LLM reviews and improves it
+     ▼
+4. Verifier (deterministic) ── rejects any candidate that:
+     │                  • is not valid Python syntax
+     │                  • still exceeds the complexity threshold
+     │                  • changes LOC by more than 20%
+     │                  Rejected candidates are never adopted; the verifier's
+     │                  reason is fed back to the generator for the next round.
+     ▼
+Refactored source + diff + metrics
+```
 
-1. Install Ollama and pull a local model such as `llama3.2`.
-2. Start the Ollama server.
-3. Install Python dependencies.
-4. Run the Streamlit app.
+Key design points:
 
-## Run
+- **Deterministic guardrails around a nondeterministic model.** The LLM only ever proposes; acceptance is decided by AST parsing and measured complexity, so the output can never be syntactically broken.
+- **Local-first.** Runs fully offline against a local Ollama model. Also supports any OpenAI-compatible hosted API (Groq, OpenRouter, Together, vLLM) for cloud deployment.
+- **Graceful degradation.** With no LLM reachable, the app still delivers the static-analysis report and retrieved guidelines in analysis-only mode.
+
+## Run locally
 
 ```bash
-pip install -e .
+pip install -r requirements.txt
 streamlit run app.py
+```
+
+For full refactoring, either:
+
+- **Ollama (fully local):** install [Ollama](https://ollama.com), run `ollama pull llama3.1` and keep the server running, or
+- **Hosted API:** pick "Hosted API" in the sidebar and provide an OpenAI-compatible base URL, model, and API key (e.g. a free Groq key).
+
+## Deploy (Streamlit Community Cloud)
+
+1. Push this repo to GitHub.
+2. On [share.streamlit.io](https://share.streamlit.io), create an app pointing at `app.py`.
+3. (Optional, enables full refactoring in the cloud) In the app's **Settings → Secrets**, add:
+
+```toml
+LLM_BASE_URL = "https://api.groq.com/openai/v1"
+LLM_MODEL = "llama-3.1-8b-instant"
+LLM_API_KEY = "your-key"
+```
+
+Without secrets the deployed app runs in analysis-only mode (complexity report, pylint findings, and retrieved guidelines).
+
+## Project layout
+
+```
+app.py                        Streamlit UI
+hybrid_code_auditor/
+  analysis.py                 AST walk, radon complexity, pylint integration
+  rag.py                      Guideline chunking, TF-IDF + FAISS retrieval
+  llm.py                      Ollama and OpenAI-compatible clients
+  prompts.py                  Generator and critic prompts
+  pipeline.py                 Generate → critique → verify loop
+  models.py                   Dataclasses for findings and results
+data/guidelines/              Local PEP 8 / OWASP guidance corpus
 ```
 
 ## Notes
 
 - The bundled guidance files are concise local summaries intended for retrieval grounding.
 - The verifier checks syntactic validity and measured complexity; deeper semantic validation should be backed by project tests.
-# Hybird-Code-Auditor

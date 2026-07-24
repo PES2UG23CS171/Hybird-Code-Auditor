@@ -32,7 +32,7 @@ Retrieved guidance:
 Feedback from prior round:
 {feedback or 'None'}
 
-Return only the replacement Python code block for this function, plus any helper functions it needs. Do not add prose.
+Respond with exactly one fenced Python code block containing the full replacement for this function, plus any helper functions it needs. No prose before or after the block.
 """
 
 
@@ -56,5 +56,5 @@ Candidate code:
 Guidance:
 {guideline_text}
 
-Return an improved replacement code block only.
+Respond with exactly one fenced Python code block containing the improved replacement. If the candidate is already good, return it unchanged. No prose before or after the block.
 """

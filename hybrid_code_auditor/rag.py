@@ -18,6 +18,9 @@ class GuidelineStore:
     matrix: np.ndarray
 
     def search(self, query: str, top_k: int = 3) -> list[GuidelineChunk]:
+        top_k = min(top_k, len(self.chunks))
+        if top_k <= 0:
+            return []
         query_vector = self.vectorizer.transform([query]).astype(np.float32).toarray()
         faiss.normalize_L2(query_vector)
         distances, indices = self.index.search(query_vector, top_k)
@@ -39,6 +42,11 @@ def build_default_guideline_store() -> GuidelineStore:
             texts.append(chunk)
 
     documents = [chunk.text for chunk in texts]
+    if not documents:
+        raise FileNotFoundError(
+            f"No guideline files found in {base_path}. "
+            "Expected markdown files under data/guidelines/."
+        )
     vectorizer = TfidfVectorizer(stop_words="english")
     matrix = vectorizer.fit_transform(documents).astype(np.float32).toarray()
     faiss.normalize_L2(matrix)
